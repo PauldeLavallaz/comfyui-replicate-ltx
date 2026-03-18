@@ -74,6 +74,37 @@ def _make_video_output(path: str):
     return path
 
 
+def upload_audio_catbox(data: bytes, filename: str, mime: str) -> str:
+    """Upload audio to catbox.moe — URL includes extension (e.g. files.catbox.moe/xxx.mp3).
+    Replicate models detect audio format from URL extension, not Content-Type.
+    """
+    try:
+        r = requests.post(
+            "https://catbox.moe/user/api.php",
+            data={"reqtype": "fileupload", "userhash": ""},
+            files={"fileToUpload": (filename, data, mime)},
+            timeout=60,
+        )
+        r.raise_for_status()
+        url = r.text.strip()
+        if url.startswith("https://"):
+            print(f"[RLTX] Audio uploaded (catbox.moe) → {url}")
+            return url
+    except Exception as e:
+        print(f"[RLTX] catbox.moe failed ({e}), trying litterbox...")
+    # fallback: litterbox 72h
+    r = requests.post(
+        "https://litterbox.catbox.moe/resources/internals/api.php",
+        data={"reqtype": "fileupload", "time": "72h"},
+        files={"fileToUpload": (filename, data, mime)},
+        timeout=60,
+    )
+    r.raise_for_status()
+    url = r.text.strip()
+    print(f"[RLTX] Audio uploaded (litterbox) → {url}")
+    return url
+
+
 TASKS = ["text_to_video", "image_to_video", "audio_to_video", "extend", "retake"]
 RESOLUTIONS = ["1080p", "720p", "480p"]
 ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "4:5"]
@@ -422,10 +453,9 @@ class RLTXAudioToVideo:
         img_bytes = tensor_to_jpeg_bytes(image)
         image_url = upload_to_replicate(img_bytes, "rltx_image.jpg", "image/jpeg", api_key.strip())
 
-        print("[RLTX] Encoding audio → MP3 + uploading to Replicate Files...")
+        print("[RLTX] Encoding audio → MP3 + uploading to catbox.moe (extension URL)...")
         audio_bytes = audio_tensor_to_mp3(audio)
-        audio_mime = "audio/mpeg"
-        audio_url = upload_to_replicate(audio_bytes, "rltx_audio.mp3", audio_mime, api_key.strip())
+        audio_url = upload_audio_catbox(audio_bytes, "rltx_audio.mp3", "audio/mpeg")
 
         inputs = {
             "task": "audio_to_video",
