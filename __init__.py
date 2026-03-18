@@ -165,7 +165,7 @@ def download_video(url: str) -> bytes:
 
 
 def save_video_to_comfy(video_bytes: bytes, prefix: str = "rltx") -> tuple:
-    """Save video bytes and return (IMAGE tensor, video_path)."""
+    """Save video bytes and return (IMAGE tensor, video_path, ui_dict)."""
     if COMFY_AVAILABLE:
         out_dir = folder_paths.get_output_directory()
     else:
@@ -176,9 +176,17 @@ def save_video_to_comfy(video_bytes: bytes, prefix: str = "rltx") -> tuple:
         f.write(video_bytes)
     print(f"[RLTX] Video saved: {out_path}")
 
-    # Decode first frame as IMAGE tensor for ComfyUI preview
+    # Build UI dict for ComfyUI video preview
+    if COMFY_AVAILABLE:
+        rel = os.path.relpath(out_path, out_dir)
+        ui_dict = {"videos": [{"filename": os.path.basename(rel),
+                                "subfolder": os.path.dirname(rel),
+                                "type": "output"}]}
+    else:
+        ui_dict = {}
+
     frames = _decode_video_frames(video_bytes)
-    return frames, out_path
+    return frames, out_path, ui_dict
 
 
 def _decode_video_frames(video_bytes: bytes):
@@ -333,8 +341,9 @@ class RLTXAudioToVideo:
     """Lip-sync video from image + audio using Replicate LTX-2.3 Pro."""
     CATEGORY = "LTX Video (Replicate)"
     FUNCTION = "generate"
-    RETURN_TYPES = ("IMAGE", "STRING")
-    RETURN_NAMES = ("frames", "video_path")
+    OUTPUT_NODE = True
+    RETURN_TYPES = ("IMAGE", "STRING", "FLOAT")
+    RETURN_NAMES = ("frames", "video_path", "fps_out")
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -381,8 +390,8 @@ class RLTXAudioToVideo:
         print(f"[RLTX] Audio-to-Video | {aspect_ratio} {resolution}")
         url = replicate_run(api_key.strip(), inputs)
         video_bytes = download_video(url)
-        frames, path = save_video_to_comfy(video_bytes, "rltx_a2v")
-        return (frames, path)
+        frames, path, ui = save_video_to_comfy(video_bytes, "rltx_a2v")
+        return {"ui": ui, "result": (frames, path, float(fps))}
 
 
 class RLTXExtendVideo:
