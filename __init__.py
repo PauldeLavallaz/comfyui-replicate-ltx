@@ -59,16 +59,16 @@ def upload_to_public(data: bytes, filename: str, mime: str, api_key: str = "") -
 
 # ─── VIDEO type helper (native ComfyUI compat) ───────────────────────────────
 def _make_video_output(path: str):
-    """Wrap video path as ComfyUI VIDEO type object when available."""
+    """Wrap video path as ComfyUI VIDEO type (VideoFromFile) for SaveVideo compat."""
     try:
-        from comfy_api.input_impl import VideoInput
-        return VideoInput(path)
+        from comfy_api.input_impl import VideoFromFile
+        return VideoFromFile(path)
     except ImportError:
         pass
     try:
-        from comfy.video_types import VideoOutput
-        return VideoOutput(path)
-    except ImportError:
+        from comfy_api.latest._input_impl import VideoFromFile
+        return VideoFromFile(path)
+    except (ImportError, AttributeError):
         pass
     # Fallback: plain path string (works with some save nodes)
     return path
