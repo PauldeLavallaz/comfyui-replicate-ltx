@@ -29,21 +29,20 @@ REPLICATE_POLL_URL = "https://api.replicate.com/v1/predictions/{id}"
 # ─────────────────────────────────────────────────────────────────────────────
 
 def upload_to_replicate(data: bytes, filename: str, mime: str, api_key: str) -> str:
-    """Upload bytes to Replicate's own file storage via /v1/files API.
+    """Upload bytes to Replicate's own file storage via /v1/files API (multipart/form-data).
     Returns a replicate.delivery URL — always accessible from Replicate inference.
     """
     r = requests.post(
         "https://api.replicate.com/v1/files",
-        headers={
-            "Authorization": f"Token {api_key}",
-            "Content-Type": mime,
-            "Content-Disposition": f'attachment; filename="{filename}"',
-        },
-        data=data,
+        headers={"Authorization": f"Token {api_key}"},
+        files={"content": (filename, data, mime)},
         timeout=120,
     )
-    r.raise_for_status()
-    url = r.json()["urls"]["get"]
+    if not r.ok:
+        raise RuntimeError(f"Replicate Files upload failed {r.status_code}: {r.text[:200]}")
+    result = r.json()
+    # Try urls.get first, fallback to etag URL
+    url = result.get("urls", {}).get("get") or result.get("url") or result.get("id")
     print(f"[RLTX] Uploaded to Replicate ({filename}) → {url}")
     return url
 
