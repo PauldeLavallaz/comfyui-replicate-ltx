@@ -25,53 +25,37 @@ REPLICATE_API_URL = "https://api.replicate.com/v1/models/lightricks/ltx-2.3-pro/
 REPLICATE_POLL_URL = "https://api.replicate.com/v1/predictions/{id}"
 
 # ─────────────────────────────────────────────────────────────────────────────
-# UPLOAD HELPER — catbox.moe (Replicate requires public HTTPS URLs for image)
+# UPLOAD HELPER — Replicate Files API (guaranteed accessible from Replicate)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def upload_to_public(data: bytes, filename: str, mime: str) -> str:
-    """Upload bytes to catbox.moe (permanent) or litterbox (72h fallback).
-    Returns a public HTTPS URL. Required because Replicate ignores data URIs
-    for image inputs in some models.
+def upload_to_replicate(data: bytes, filename: str, mime: str, api_key: str) -> str:
+    """Upload bytes to Replicate's own file storage via /v1/files API.
+    Returns a replicate.delivery URL — always accessible from Replicate inference.
     """
-    # 1. catbox.moe — permanent, no hotlink restrictions
-    try:
-        r = requests.post(
-            "https://catbox.moe/user/api.php",
-            data={"reqtype": "fileupload", "userhash": ""},
-            files={"fileToUpload": (filename, data, mime)},
-            timeout=60,
-        )
-        r.raise_for_status()
-        url = r.text.strip()
-        if url.startswith("https://"):
-            print(f"[RLTX] Uploaded ({filename}) → {url}")
-            return url
-    except Exception as e:
-        print(f"[RLTX] catbox.moe failed ({e}), trying litterbox...")
+    r = requests.post(
+        "https://api.replicate.com/v1/files",
+        headers={
+            "Authorization": f"Token {api_key}",
+            "Content-Type": mime,
+            "Content-Disposition": f'attachment; filename="{filename}"',
+        },
+        data=data,
+        timeout=120,
+    )
+    r.raise_for_status()
+    url = r.json()["urls"]["get"]
+    print(f"[RLTX] Uploaded to Replicate ({filename}) → {url}")
+    return url
 
-    # 2. litterbox — 72h fallback
-    try:
-        r = requests.post(
-            "https://litterbox.catbox.moe/resources/internals/api.php",
-            data={"reqtype": "fileupload", "time": "72h"},
-            files={"fileToUpload": (filename, data, mime)},
-            timeout=60,
-        )
-        r.raise_for_status()
-        url = r.text.strip()
-        if url.startswith("https://"):
-            print(f"[RLTX] Uploaded (litterbox) → {url}")
-            return url
-    except Exception as e:
-        print(f"[RLTX] litterbox failed ({e}), trying uguu.se...")
-
-    # 3. uguu.se — last resort
+# Keep upload_to_public as alias for backward compat
+def upload_to_public(data: bytes, filename: str, mime: str, api_key: str = "") -> str:
+    if api_key:
+        return upload_to_replicate(data, filename, mime, api_key)
+    # fallback without key
     r = requests.post("https://uguu.se/upload",
                       files={"files[]": (filename, data, mime)}, timeout=60)
     r.raise_for_status()
-    url = r.json()["files"][0]["url"]
-    print(f"[RLTX] Uploaded (uguu.se) → {url}")
-    return url
+    return r.json()["files"][0]["url"]
 
 
 # ─── VIDEO type helper (native ComfyUI compat) ───────────────────────────────
@@ -435,14 +419,14 @@ class RLTXAudioToVideo:
         if not api_key.strip():
             raise ValueError("Replicate API key is required.")
 
-        print("[RLTX] Encoding + uploading image to catbox.moe...")
+        print("[RLTX] Encoding + uploading image to Replicate Files...")
         img_bytes = tensor_to_jpeg_bytes(image)
-        image_url = upload_to_public(img_bytes, "rltx_image.jpg", "image/jpeg")
+        image_url = upload_to_replicate(img_bytes, "rltx_image.jpg", "image/jpeg", api_key.strip())
 
-        print("[RLTX] Encoding audio → MP3 + uploading...")
+        print("[RLTX] Encoding audio → MP3 + uploading to Replicate Files...")
         audio_bytes = audio_tensor_to_mp3(audio)
         audio_mime = "audio/mpeg"
-        audio_url = upload_to_public(audio_bytes, "rltx_audio.mp3", audio_mime)
+        audio_url = upload_to_replicate(audio_bytes, "rltx_audio.mp3", audio_mime, api_key.strip())
 
         inputs = {
             "task": "audio_to_video",
