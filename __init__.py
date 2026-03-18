@@ -449,13 +449,15 @@ class RLTXAudioToVideo:
         if not api_key.strip():
             raise ValueError("Replicate API key is required.")
 
-        print("[RLTX] Encoding image...")
+        # Image → Replicate Files API (required: model ignores data URIs for image)
+        print("[RLTX] Uploading image to Replicate Files...")
         img_bytes = tensor_to_jpeg_bytes(image)
-        image_url = upload_audio_catbox(img_bytes, "rltx_image.jpg", "image/jpeg")
+        image_url = upload_to_replicate(img_bytes, "rltx_image.jpg", "image/jpeg", api_key.strip())
 
-        print("[RLTX] Encoding audio → MP3...")
+        # Audio → data URI (Replicate accepts it and detects format from Content-Type)
+        print("[RLTX] Encoding audio → MP3 (data URI)...")
         audio_bytes = audio_tensor_to_mp3(audio)
-        audio_url = upload_audio_catbox(audio_bytes, "rltx_audio.mp3", "audio/mpeg")
+        audio_url = bytes_to_data_uri(audio_bytes, "audio/mpeg")
 
         inputs = {
             "task": "audio_to_video",
