@@ -392,8 +392,8 @@ class RLTXAudioToVideo:
     CATEGORY = "LTX Video (Replicate)"
     FUNCTION = "generate"
     OUTPUT_NODE = True
-    RETURN_TYPES = ("IMAGE", "STRING", "FLOAT")
-    RETURN_NAMES = ("frames", "video_path", "fps_out")
+    RETURN_TYPES = ("IMAGE", "VIDEO", "FLOAT")
+    RETURN_NAMES = ("frames", "video", "fps_out")
 
     @classmethod
     def INPUT_TYPES(cls):
