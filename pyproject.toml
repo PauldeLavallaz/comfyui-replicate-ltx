@@ -1,0 +1,9 @@
+[project]
+name = "comfyui-replicate-ltx"
+version = "1.0.0"
+description = "ComfyUI nodes for LTX-2.3 Pro via Replicate API"
+requires-python = ">=3.10"
+dependencies = ["requests", "pillow"]
+
+[project.urls]
+Repository = "https://github.com/PauldeLavallaz/comfyui-replicate-ltx"
