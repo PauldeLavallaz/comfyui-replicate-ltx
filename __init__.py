@@ -24,6 +24,56 @@ except ImportError:
 REPLICATE_API_URL = "https://api.replicate.com/v1/models/lightricks/ltx-2.3-pro/predictions"
 REPLICATE_POLL_URL = "https://api.replicate.com/v1/predictions/{id}"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# UPLOAD HELPER — catbox.moe (Replicate requires public HTTPS URLs for image)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def upload_to_public(data: bytes, filename: str, mime: str) -> str:
+    """Upload bytes to catbox.moe (permanent) or litterbox (72h fallback).
+    Returns a public HTTPS URL. Required because Replicate ignores data URIs
+    for image inputs in some models.
+    """
+    # 1. catbox.moe — permanent, no hotlink restrictions
+    try:
+        r = requests.post(
+            "https://catbox.moe/user/api.php",
+            data={"reqtype": "fileupload", "userhash": ""},
+            files={"fileToUpload": (filename, data, mime)},
+            timeout=60,
+        )
+        r.raise_for_status()
+        url = r.text.strip()
+        if url.startswith("https://"):
+            print(f"[RLTX] Uploaded ({filename}) → {url}")
+            return url
+    except Exception as e:
+        print(f"[RLTX] catbox.moe failed ({e}), trying litterbox...")
+
+    # 2. litterbox — 72h fallback
+    try:
+        r = requests.post(
+            "https://litterbox.catbox.moe/resources/internals/api.php",
+            data={"reqtype": "fileupload", "time": "72h"},
+            files={"fileToUpload": (filename, data, mime)},
+            timeout=60,
+        )
+        r.raise_for_status()
+        url = r.text.strip()
+        if url.startswith("https://"):
+            print(f"[RLTX] Uploaded (litterbox) → {url}")
+            return url
+    except Exception as e:
+        print(f"[RLTX] litterbox failed ({e}), trying uguu.se...")
+
+    # 3. uguu.se — last resort
+    r = requests.post("https://uguu.se/upload",
+                      files={"files[]": (filename, data, mime)}, timeout=60)
+    r.raise_for_status()
+    url = r.json()["files"][0]["url"]
+    print(f"[RLTX] Uploaded (uguu.se) → {url}")
+    return url
+
+
 TASKS = ["text_to_video", "image_to_video", "audio_to_video", "extend", "retake"]
 RESOLUTIONS = ["1080p", "720p", "480p"]
 ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "4:5"]
@@ -367,18 +417,19 @@ class RLTXAudioToVideo:
         if not api_key.strip():
             raise ValueError("Replicate API key is required.")
 
-        print("[RLTX] Encoding image...")
+        print("[RLTX] Encoding + uploading image to catbox.moe...")
         img_bytes = tensor_to_jpeg_bytes(image)
+        image_url = upload_to_public(img_bytes, "rltx_image.jpg", "image/jpeg")
 
-        print("[RLTX] Encoding audio → MP3...")
+        print("[RLTX] Encoding audio → MP3 + uploading...")
         audio_bytes = audio_tensor_to_mp3(audio)
-        audio_ext = "mp3"
         audio_mime = "audio/mpeg"
+        audio_url = upload_to_public(audio_bytes, "rltx_audio.mp3", audio_mime)
 
         inputs = {
             "task": "audio_to_video",
-            "image": bytes_to_data_uri(img_bytes, "image/jpeg"),
-            "audio": bytes_to_data_uri(audio_bytes, audio_mime),
+            "image": image_url,
+            "audio": audio_url,
             "prompt": prompt,
             "resolution": resolution,
             "aspect_ratio": aspect_ratio,
