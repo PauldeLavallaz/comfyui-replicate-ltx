@@ -74,6 +74,23 @@ def upload_to_public(data: bytes, filename: str, mime: str) -> str:
     return url
 
 
+# ─── VIDEO type helper (native ComfyUI compat) ───────────────────────────────
+def _make_video_output(path: str):
+    """Wrap video path as ComfyUI VIDEO type object when available."""
+    try:
+        from comfy_api.input_impl import VideoInput
+        return VideoInput(path)
+    except ImportError:
+        pass
+    try:
+        from comfy.video_types import VideoOutput
+        return VideoOutput(path)
+    except ImportError:
+        pass
+    # Fallback: plain path string (works with some save nodes)
+    return path
+
+
 TASKS = ["text_to_video", "image_to_video", "audio_to_video", "extend", "retake"]
 RESOLUTIONS = ["1080p", "720p", "480p"]
 ASPECT_RATIOS = ["16:9", "9:16", "1:1", "4:3", "3:4", "21:9", "4:5"]
@@ -236,7 +253,8 @@ def save_video_to_comfy(video_bytes: bytes, prefix: str = "rltx") -> tuple:
         ui_dict = {}
 
     frames = _decode_video_frames(video_bytes)
-    return frames, out_path, ui_dict
+    video_obj = _make_video_output(out_path)
+    return frames, video_obj, ui_dict
 
 
 def _decode_video_frames(video_bytes: bytes):
