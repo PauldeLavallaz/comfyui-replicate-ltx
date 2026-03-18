@@ -460,7 +460,7 @@ class RLTXAudioToVideo:
         audio_url = bytes_to_data_uri(audio_bytes, "audio/mpeg")
 
         inputs = {
-            "task": "audio_to_video",
+            "task": "image_to_video",  # image_to_video + audio respects the image; audio_to_video ignores it
             "image": image_url,
             "audio": audio_url,
             "prompt": prompt,
